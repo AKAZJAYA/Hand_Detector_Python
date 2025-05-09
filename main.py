@@ -38,6 +38,9 @@ print(f"Found images: {pathImages}")
 imgNumber = 0
 hs, ws = int(120 * 3), int(213 * 3)
 gestureThreshold = 400
+buttonPressed = False
+buttonCounter = 0
+buttonDelay = 10
 
 # Set up MediaPipe directly - avoiding cvzone's wrapper to have more control
 mp_hands = mp.solutions.hands
@@ -161,7 +164,7 @@ while True:
                               (255, 0, 255), 2)
             
             # If hands are detected, check fingers up status
-            if all_hands:
+            if all_hands and buttonPressed is False:
                 hand = all_hands[0]
                 fingers = detector.fingersUp(hand)
                 cx, cy = hand["center"]
@@ -173,12 +176,14 @@ while True:
                     if fingers == [1, 0, 0, 0, 0]:
                         print("Left")
                         if imgNumber > 0:
+                            buttonPressed = True
                             imgNumber -= 1
 
                     # Gesture 1 - Right
                     if fingers == [0, 0, 0, 0, 1]:
                         print("Right")
                         if imgNumber < len(pathImages) - 1:
+                            buttonPressed = True
                             imgNumber += 1
                 
                 # Draw finger status on image
@@ -192,6 +197,13 @@ while True:
                 
                 cv2.putText(img, finger_text[:-2], (10, 30), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+            #Button Pressed Itterations
+            if buttonPressed:
+                buttonCounter += 1
+                if buttonCounter > buttonDelay:
+                    buttonCounter = 0
+                    buttonPressed = False
 
         # Handle presentation slides
         if 0 <= imgNumber < len(pathImages):
