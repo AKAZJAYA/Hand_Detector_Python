@@ -42,6 +42,8 @@ buttonPressed = False
 buttonCounter = 0
 buttonDelay = 30
 annotations = []
+annotationNumber = -1
+annotationStart = False
 annotationColor = (0, 0, 255)  # Red color for drawing
 annotationThickness = 4  # Thickness of the drawing line
 
@@ -201,6 +203,9 @@ while True:
                         print("Left")
                         if imgNumber > 0:
                             buttonPressed = True
+                            annotations = []
+                            annotationNumber = -1
+                            annotationStart = False
                             imgNumber -= 1
 
                     # Gesture 2 - Right
@@ -208,6 +213,9 @@ while True:
                         print("Right")
                         if imgNumber < len(pathImages) - 1:
                             buttonPressed = True
+                            annotations = []
+                            annotationNumber = -1
+                            annotationStart = False
                             imgNumber += 1
 
                 
@@ -238,44 +246,65 @@ while True:
             if imgCurrent is not None:
                 # Draw existing annotations on the current slide
                 if annotations:
-                    for point in annotations:
-                        cv2.circle(imgCurrent, tuple(point), annotationThickness, annotationColor, cv2.FILLED)
-                    for i in range(1, len(annotations)):
-                        cv2.line(imgCurrent, tuple(annotations[i-1]), tuple(annotations[i]), 
-                                 annotationColor, annotationThickness)
+                    for drawing in annotations:
+                        for point in drawing:
+                            cv2.circle(imgCurrent, tuple(point), annotationThickness, annotationColor, cv2.FILLED)
+                        for i in range(1, len(drawing)):
+                            cv2.line(imgCurrent, tuple(drawing[i-1]), tuple(drawing[i]),
+                                     annotationColor, annotationThickness)
                 # Check if we need to draw pointer circle from earlier hand gesture
                 if results.multi_hand_landmarks and all_hands:
                     hand = all_hands[0]
                     fingers = detector.fingersUp(hand)
                     h, w, _ = imgCurrent.shape
-                    
+
                     # Get raw finger position
                     indexFingerX, indexFingerY = lmList[8][0], lmList[8][1]
-                    
+
                     # Map the coordinates to the slide dimensions
                     slideX = int(np.interp(indexFingerX, [0, width], [0, w]))
                     slideY = int(np.interp(indexFingerY, [150, height-150], [0, h]))
-                    
-                    # Gesture 3 - Show Pointer 
+
+                    # Gesture 3 - Show Pointer
                     if fingers == [0, 1, 1, 0, 0]:
                         # Use the mapped coordinates for drawing the circle
                         cv2.circle(imgCurrent, (slideX, slideY), 12, (0, 0, 255), cv2.FILLED)
 
                     # Gesture 4 - Draw Pointer
                     if fingers == [0, 1, 0, 0, 0]:
-                        # Get the mapped coordinates for drawing
-                        annotations.append([slideX, slideY])
-                        cv2.circle(imgCurrent, (slideX, slideY), annotationThickness, annotationColor, cv2.FILLED)
+                        # If we weren't drawing and now we are, start a new drawing list
+                        if not annotationStart:
+                            annotationStart = True
+                            annotations.append([])  # Start a new list for this drawing
                         
-                        # Draw lines between consecutive annotation points
-                        if len(annotations) > 1:
-                            for i in range(1, len(annotations)):
-                                cv2.line(imgCurrent, tuple(annotations[i-1]), tuple(annotations[i]), 
-                                         annotationColor, annotationThickness)
-                                
+                        # Add the current point to the current drawing
+                        if annotations:  # Check if there are any annotations lists
+                            annotations[-1].append([slideX, slideY])
+                            cv2.circle(imgCurrent, (slideX, slideY), annotationThickness, annotationColor, cv2.FILLED)
+                            
+                            # Draw lines only within the current drawing list
+                            current_drawing = annotations[-1]
+                            if len(current_drawing) > 1:
+                                for i in range(1, len(current_drawing)):
+                                    cv2.line(imgCurrent, tuple(current_drawing[i-1]), tuple(current_drawing[i]),
+                                             annotationColor, annotationThickness)
+                                             
+                    # Add a gesture to end the current drawing (e.g., when middle finger is up with index)
+                    if fingers == [0, 1, 1, 0, 0]:
+                        annotationStart = False  # End the current drawing
+                        # This gesture is also used for pointer, so you may want to use a different finger combination
+                        # or add additional logic to differentiate between pointer and end-drawing gestures
+
+                    # Gesture 5 - Erase Last Drawing
+                    if fingers == [0, 1, 0, 0, 1]:  # Index and pinky up
+                        if annotations and not annotationStart:  # Only erase if not currently drawing
+                            annotations.pop()  # Remove the last drawing
+                            print("Last annotation erased")
+
                     # Add a new gesture to clear annotations when needed (e.g., all fingers up)
                     if fingers == [1, 1, 1, 1, 1]:
                         annotations = []  # Clear all annotations
+                        annotationStart = False  # Reset the drawing state
                         print("Annotations cleared")
 
                 # Adding webcam image on the slides
