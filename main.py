@@ -40,7 +40,10 @@ hs, ws = int(120 * 3), int(213 * 3)
 gestureThreshold = 400
 buttonPressed = False
 buttonCounter = 0
-buttonDelay = 10
+buttonDelay = 30
+annotations = []
+annotationColor = (0, 0, 255)  # Red color for drawing
+annotationThickness = 4  # Thickness of the drawing line
 
 # Set up MediaPipe directly - avoiding cvzone's wrapper to have more control
 mp_hands = mp.solutions.hands
@@ -168,10 +171,31 @@ while True:
                 hand = all_hands[0]
                 fingers = detector.fingersUp(hand)
                 cx, cy = hand["center"]
-                # print(fingers)
+                lmList = hand["lmList"]
 
+                # Get the index finger position
+                indexFingerX, indexFingerY = lmList[8][0], lmList[8][1]
+                
+                # Map the index finger position from webcam to slide
+                # Map X from [0, width] to [0, w] (w is slide width)
+                # Map Y from [150, height-150] to [0, h] (h is slide height)
+                
+                if 0 <= imgNumber < len(pathImages):
+                    pathFullImage = os.path.join(folderPath, pathImages[imgNumber])
+                    imgCurrent = cv2.imread(pathFullImage)
+                    
+                    if imgCurrent is not None:
+                        h, w, _ = imgCurrent.shape
+                        
+                        # Map finger position from webcam to full slide coordinates
+                        slideX = int(np.interp(indexFingerX, [0, width], [0, w]))
+                        slideY = int(np.interp(indexFingerY, [150, height-150], [0, h]))
+                        
+                        # Store mapped coordinates for use in drawing the pointer
+                        mappedFingerPos = (slideX, slideY)
+
+                # Rest of finger gesture recognition code remains the same
                 if cy <= gestureThreshold:
-
                     #Gesture 1 - Left
                     if fingers == [1, 0, 0, 0, 0]:
                         print("Left")
@@ -179,12 +203,13 @@ while True:
                             buttonPressed = True
                             imgNumber -= 1
 
-                    # Gesture 1 - Right
+                    # Gesture 2 - Right
                     if fingers == [0, 0, 0, 0, 1]:
                         print("Right")
                         if imgNumber < len(pathImages) - 1:
                             buttonPressed = True
                             imgNumber += 1
+
                 
                 # Draw finger status on image
                 finger_names = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
@@ -211,6 +236,48 @@ while True:
             imgCurrent = cv2.imread(pathFullImage)
 
             if imgCurrent is not None:
+                # Draw existing annotations on the current slide
+                if annotations:
+                    for point in annotations:
+                        cv2.circle(imgCurrent, tuple(point), annotationThickness, annotationColor, cv2.FILLED)
+                    for i in range(1, len(annotations)):
+                        cv2.line(imgCurrent, tuple(annotations[i-1]), tuple(annotations[i]), 
+                                 annotationColor, annotationThickness)
+                # Check if we need to draw pointer circle from earlier hand gesture
+                if results.multi_hand_landmarks and all_hands:
+                    hand = all_hands[0]
+                    fingers = detector.fingersUp(hand)
+                    h, w, _ = imgCurrent.shape
+                    
+                    # Get raw finger position
+                    indexFingerX, indexFingerY = lmList[8][0], lmList[8][1]
+                    
+                    # Map the coordinates to the slide dimensions
+                    slideX = int(np.interp(indexFingerX, [0, width], [0, w]))
+                    slideY = int(np.interp(indexFingerY, [150, height-150], [0, h]))
+                    
+                    # Gesture 3 - Show Pointer 
+                    if fingers == [0, 1, 1, 0, 0]:
+                        # Use the mapped coordinates for drawing the circle
+                        cv2.circle(imgCurrent, (slideX, slideY), 12, (0, 0, 255), cv2.FILLED)
+
+                    # Gesture 4 - Draw Pointer
+                    if fingers == [0, 1, 0, 0, 0]:
+                        # Get the mapped coordinates for drawing
+                        annotations.append([slideX, slideY])
+                        cv2.circle(imgCurrent, (slideX, slideY), annotationThickness, annotationColor, cv2.FILLED)
+                        
+                        # Draw lines between consecutive annotation points
+                        if len(annotations) > 1:
+                            for i in range(1, len(annotations)):
+                                cv2.line(imgCurrent, tuple(annotations[i-1]), tuple(annotations[i]), 
+                                         annotationColor, annotationThickness)
+                                
+                    # Add a new gesture to clear annotations when needed (e.g., all fingers up)
+                    if fingers == [1, 1, 1, 1, 1]:
+                        annotations = []  # Clear all annotations
+                        print("Annotations cleared")
+
                 # Adding webcam image on the slides
                 imgSmall = cv2.resize(img, (ws, hs))
                 h, w, _ = imgCurrent.shape
