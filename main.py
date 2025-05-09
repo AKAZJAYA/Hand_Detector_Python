@@ -37,6 +37,7 @@ print(f"Found images: {pathImages}")
 # Variables
 imgNumber = 0
 hs, ws = int(120 * 3), int(213 * 3)
+gestureThreshold = 400
 
 # Set up MediaPipe directly - avoiding cvzone's wrapper to have more control
 mp_hands = mp.solutions.hands
@@ -135,6 +136,7 @@ while True:
         # Process image with MediaPipe
         results = hands_detector.process(img_rgb)
 
+        cv2.line(img, (0, gestureThreshold), (width, gestureThreshold), (0, 255, 0), 10)
         # Process results
         all_hands = []
 
@@ -162,7 +164,22 @@ while True:
             if all_hands:
                 hand = all_hands[0]
                 fingers = detector.fingersUp(hand)
-                print(fingers)
+                cx, cy = hand["center"]
+                # print(fingers)
+
+                if cy <= gestureThreshold:
+
+                    #Gesture 1 - Left
+                    if fingers == [1, 0, 0, 0, 0]:
+                        print("Left")
+                        if imgNumber > 0:
+                            imgNumber -= 1
+
+                    # Gesture 1 - Right
+                    if fingers == [0, 0, 0, 0, 1]:
+                        print("Right")
+                        if imgNumber < len(pathImages) - 1:
+                            imgNumber += 1
                 
                 # Draw finger status on image
                 finger_names = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
